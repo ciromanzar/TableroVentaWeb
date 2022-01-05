@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1563898046674.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "34|11|205|4|\n61|44|77|2|\n88|40|97|2|\n98|46|108|2|\n109|44|120|2|\n121|47|131|2|\n133|31|144|2|\n145|42|155|2|\n157|32|169|2|\n170|43|180|2|\n182|32|195|2|\n196|42|205|2|\n206|17|269|2|\n230|37|263|2|\n264|42|268|2|\n270|24|308|2|\n289|48|307|2|\n348|51|377|2|\n379|28|476|4|\n429|46|451|2|\n452|48|476|2|\n",
+    "hash" : "92450894",
+    "id" : "31286258",
+    "lastKnownWriteTime" : 1595513816,
+    "last_content_update" : 1606828706763,
+    "path" : "C:/Users/Ciro Zar/Source/Repos/TableroWebMega/TableroVentaWeb/server.R",
+    "project_path" : "TableroVentaWeb/server.R",
+    "properties" : {
+        "cursorPosition" : "348,25",
+        "scrollLine" : "34"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 2,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

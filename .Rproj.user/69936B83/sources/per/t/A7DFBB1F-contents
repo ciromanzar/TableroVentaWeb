@@ -1,0 +1,54 @@
+library(shiny)
+library(RMySQL)
+
+
+DESARROLLO <- TRUE;
+
+dbSession <- function(){
+  if(DESARROLLO)
+    result <- dbConnect(MySQL(), user='root', dbname='ventas', host='192.168.0.11', password='cosmos.8088.' , port=3306)
+  else
+    result <- dbConnect(MySQL(), user='root',  dbname='ventas', password='cosmos', host='172.16.254.142')
+  return(result)
+}
+
+marketplaces <- function() {
+  mydb <- dbSession()
+  query <- paste("SELECT concat(m.idMarketplace, ' ', m.descripcion) marketplace FROM ventaweb_marketplace m 
+                INNER JOIN ventaweb_canal c ON c.idCanal = m.idCanal;")
+  
+  result <-dbGetQuery(mydb, query)$marketplace
+  dbDisconnect(mydb)
+  return(result)
+}
+
+breaksOrdenesx <- function(maxHoras){
+  if(maxHoras <= 24)
+    return(1)
+  else if(maxHoras <= 48 )
+    return(2)
+  else if(maxHoras <= 72 )
+    return(4)
+  else if(maxHoras <= 144 )
+    return(12)
+  else
+    return(24)
+}
+
+breaksInterdepositosy <- function(maxHoras){
+  if(maxHoras <= 12)
+    return(1)
+  else if(maxHoras <= 24)
+    return(2)
+  else if(maxHoras <= 48)
+    return(4)
+  else if(maxHoras <= 72)
+    return(6)
+  else if(maxHoras <= 144)
+    return(12)
+  else if(maxHoras <= 240)
+    return(24)
+  else
+    return(48)
+}
+

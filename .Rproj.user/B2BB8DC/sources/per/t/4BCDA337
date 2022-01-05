@@ -1,0 +1,26 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1563461682441.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "14|28|22|0|\n",
+    "hash" : "2835968214",
+    "id" : "4BCDA337",
+    "lastKnownWriteTime" : 1586790118,
+    "last_content_update" : 1586799588970,
+    "path" : "C:/Users/Ciro Zar/Source/Repos/TableroWebMega/TableroVentaWeb/global.R",
+    "project_path" : "TableroVentaWeb/global.R",
+    "properties" : {
+        "cursorPosition" : "26,13",
+        "scrollLine" : "0",
+        "tempName" : "Untitled1"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

@@ -1,0 +1,478 @@
+#
+# This is the server logic of a Shiny web application. You can run the
+# application by clicking 'Run App' above.
+#
+# Find out more about building applications with Shiny here:
+#
+#    http://shiny.rstudio.com/
+#
+
+library(shiny)
+library(RMySQL)
+library(datasets)
+library(shinyWidgets)
+library(DT)
+library(tidyverse)
+library(funModeling)
+library(Hmisc)
+library(ggplot2)
+library(scales)
+library(plotly)
+library(scales)
+
+source("global.R")
+
+# Define server logic required to draw a histogram
+shinyServer(function(input, output, session) {
+  tags$style(".star1 {color:#E87722}")
+  # addClass(selector = "body", class = "sidebar-collapse")
+  
+  # TIMERS -------------------------------------------------------------------------------------
+  actualizarDatos5min <- reactiveTimer(intervalMs = 300000)
+  actualizarDatos10min <- reactiveTimer(intervalMs = 600000)
+  actualizarDatos60min <- reactiveTimer(intervalMs = 3600000)
+  
+  # LABELS -------------------------------------------------------------------------------------
+  acumuladoMesCobradas <- reactive({
+    actualizarDatos5min()
+    
+    mydb <- dbSession()
+    query <- paste("SELECT count(*) cantidad, ifnull(sum(importe),0) as importe from ventaweb_orden vo
+                    where MONTH(fechaHora) = MONTH(NOW())
+      		          and YEAR(fechaHora) = YEAR(NOW());" )
+    
+    rv <-dbGetQuery(mydb, query)
+    dbDisconnect(mydb)
+    rv
+  })
+  acumuladoMesFacturado <- reactive({
+    actualizarDatos5min()
+    
+    mydb <- dbSession()
+    query <- paste("SELECT count(*) cantidad, ifnull(sum(v.importeFacturado),0) as importeFacturado from ventaweb_orden vo
+                    INNER JOIN ventaweb_orden_venta vov ON vov.idOrden = vo.idOrden
+                    INNER JOIN venta v ON v.idVenta = vov.idVenta AND v.empresa = vov.empresa and v.sucursal = vov.sucursal
+      		          where MONTH(v.fecha) = MONTH(NOW())
+      		          and YEAR(v.fecha) = YEAR(NOW());" )
+    
+    rv <-dbGetQuery(mydb, query)
+    dbDisconnect(mydb)
+    rv
+  })
+  acumuladoMesFacturadoXMarket <- reactive({
+    actualizarDatos5min()
+    
+    mydb <- dbSession()
+    query <- paste("SELECT vam.idMarketplace, count(distinct vo.idOrden) cantidad, ifnull(sum(va.brutoFacturado * va.cantidad),0) as importeFacturado from ventaweb_orden vo
+                  INNER JOIN ventaweb_orden_venta vov ON vov.idOrden = vo.idOrden
+                  INNER JOIN venta v ON v.idVenta = vov.idVenta AND v.empresa = vov.empresa and v.sucursal = vov.sucursal
+                  INNER JOIN venta_articulo va ON va.idVenta = v.idVenta AND va.empresa = v.empresa and va.sucursal = v.sucursal
+                  INNER JOIN venta_articulo_marketplace vam ON vam.idVenta = va.idVenta AND vam.empresa = va.empresa and vam.sucursal = va.sucursal AND vam.linea = va.linea
+                    where MONTH(v.fecha) = MONTH(NOW())
+                    and YEAR(v.fecha) = YEAR(NOW()) 
+                  GROUP BY vam.idMarketplace ;" )
+    
+    rv <-dbGetQuery(mydb, query)
+    dbDisconnect(mydb)
+    rv
+  })
+  output$uiAcumuladoMesOp  <- renderUI({
+    acumulado <- acumuladoMesCobradas()
+    valueBox(
+      width = 4,
+      subtitle=tags$p("Ordenes del mes cobradas",style = "font-size: 150%;"), 
+      value=tags$p(paste(acumulado[1]$cantidad, "  / $", format(floor(acumulado[2]$importe), decimal.mark=",", big.mark=".", nsmall=0)),style = "font-size: 80%;"), 
+      icon=icon("tachometer"),
+      color="blue"
+    )
+  })
+  output$uiAcumuladoMesHi  <- renderUI({
+    acumulado <- acumuladoMesFacturado()
+    valueBox(
+      width = 6,
+      subtitle=tags$p("Ventas web facturadas en el mes",style = "font-size: 150%;"), 
+      value=tags$p(paste(acumulado[1]$cantidad, "  / $", format(floor(acumulado[2]$importe), decimal.mark=",", big.mark=".", nsmall=0)),style = "font-size: 80%;"), 
+      icon=icon("tachometer"),
+      color="blue"
+    )
+  })
+  output$uiAcumuladoMesHiMLMega  <- renderUI({
+    acumulado <- acumuladoMesFacturadoXMarket()
+    dataAcumulado <- filter(acumulado, idMarketplace == "1")
+    valueBox(
+      width = 4,
+      subtitle=tags$p("Ventas ML Megasports facturadas en el mes",style = "font-size: 150%;"), 
+      value=tags$p(paste(dataAcumulado[2]$cantidad, "  / $", format(floor(dataAcumulado[3]$importe), decimal.mark=",", big.mark=".", nsmall=0)),style = "font-size: 80%;"), 
+      icon=icon("handshake"),
+      color="yellow"
+    )
+  })
+  output$uiAcumuladoMesHiVTEX  <- renderUI({
+    acumulado <- acumuladoMesFacturadoXMarket()
+    dataAcumulado <- filter(acumulado, idMarketplace == "2")
+    valueBox(
+      width = 4,
+      subtitle=tags$p("Ventas página Megasports facturadas en el mes",style = "font-size: 150%;"), 
+      value=tags$p(paste(dataAcumulado[2]$cantidad, "  / $", format(floor(dataAcumulado[3]$importe), decimal.mark=",", big.mark=".", nsmall=0)),style = "font-size: 80%;"), 
+      icon=icon("star",class="star1") ,
+      
+      color="light-blue"
+    )
+  })
+  output$uiAcumuladoMesHiFactory  <- renderUI({
+    acumulado <- acumuladoMesFacturadoXMarket()
+    dataAcumulado <- filter(acumulado, idMarketplace == "4")
+    valueBox(
+      width = 4,
+      subtitle=tags$p("Ventas ML Factory facturadas en el mes",style = "font-size: 150%;"), 
+      value=tags$p(paste(dataAcumulado[2]$cantidad, "  / $", format(floor(dataAcumulado[3]$importe), decimal.mark=",", big.mark=".", nsmall=0)),style = "font-size: 80%;"), 
+      icon=icon("handshake"),
+      color="red"
+    )
+  })
+  
+  ordenesEnviadas <- reactive({
+    actualizarDatos5min()
+    
+    mydb <- dbSession()
+    query <- paste("SELECT count(*) cantidad, ifnull(sum(importe),0) as importe from ventaweb_orden vo
+                    inner join ventaweb_orden_enviada voe ON voe.idOrden = vo.idOrden
+					          where date(voe.fechaHora) = date(NOW()) ;" )
+    
+    rv <-dbGetQuery(mydb, query)
+    dbDisconnect(mydb)
+    rv
+  })
+  output$uiOrdenesEnviadas  <-  renderUI({
+    ordenes <- ordenesEnviadas()
+    
+    valueBox(
+      width = 4,
+      subtitle=tags$p("Ordenes despachadas al correo hoy" ,style = "font-size: 150%;"), 
+      value=tags$p(paste(ordenes[1]$cantidad, "  / $", format(floor(ordenes[2]$importe), decimal.mark=",", big.mark=".", nsmall=0)),style = "font-size: 80%;"), 
+      icon=icon("shipping-fast"),
+      color="green"
+    )
+  })
+  
+  ordenesEnProceso <- reactive({
+    actualizarDatos5min()
+    
+    mydb <- dbSession()
+    query <- paste("SELECT count(*) cantidad, ifnull(sum(importe),0) as importe FROM ventas.ventaweb_orden vo
+                         WHERE fx_etapaOrdenWeb(idOrden) IN ('Articulos pedidos', 'Articulos sin pedir','Facturada')
+                         AND fechaHora > '2019-05-01'
+                         AND vo.estadoOrden IN ('Facturada', 'Abonado', 'Aprobado') " )
+    
+    rv <-dbGetQuery(mydb, query)
+    dbDisconnect(mydb)
+    rv
+  })
+  output$uiOrdenesEnProceso  <-  renderUI({
+    ordenes <- ordenesEnProceso()
+    
+    valueBox(
+      width = 4,
+      subtitle=tags$p("Ordenes abonadas en curso",style = "font-size: 150%;"), 
+      value=tags$p(paste(ordenes[1]$cantidad, "  / $", format(floor(ordenes[2]$importe), decimal.mark=",", big.mark=".", nsmall=0)),style = "font-size: 80%;"), 
+      icon=icon("box-open"),
+      color="orange"
+    )
+  })
+  
+  promedioEnvioMes <- reactive({
+    actualizarDatos5min()
+    
+    mydb <- dbSession()
+    query <- paste("SELECT avg(hour(TIMEDIFF(voe.fechaHora, vo.fechaHora))) as horasDemoraPromedio  FROM ventaweb_orden vo
+                  	INNER JOIN ventaweb_orden_enviada voe ON vo.idOrden = voe.idOrden
+                  	where MONTH(vo.fechaHora) = MONTH(now())
+                  	and YEAR(vo.fechaHora) = YEAR(NOW())
+                    AND vo.estadoOrden <> 'Cancelado' ;" )
+    
+    rv <-dbGetQuery(mydb, query)
+    dbDisconnect(mydb)
+    rv
+  })
+  output$uiPromedioEnvioMes  <- renderUI({
+    demoraPromedio <- promedioEnvioMes()
+    valueBox(
+      width = 6,
+      subtitle=tags$p("Demora de envíos promedio del mes",style = "font-size: 150%;"), 
+      value=tags$p(paste(floor(demoraPromedio[1]$horasDemoraPromedio), " horas"),style = "font-size: 80%;"), 
+      icon=icon("hourglass-half"),
+      color="orange"
+    )
+  })
+  # PLOT ORDENES --------------------------------------------------------------------
+  
+  demorasOrdenes <- reactive({
+    
+    
+    actualizarDatos10min()
+    mydb <- dbSession()
+    
+    query <- paste("SELECT vo.idOrden, hour(TIMEDIFF(now(), vo.fechaHora)) horasDemora, fx_etapaOrdenWeb(vo.idOrden) etapaOrden, voa.idMarketplace FROM ventas.ventaweb_orden vo
+                    INNER JOIN ventaweb_orden_articulo voa ON voa.idOrden = vo.idOrden
+                    WHERE fx_etapaOrdenWeb(vo.idOrden) IN ('Articulos pedidos', 'Articulos sin pedir','Facturada')
+                    AND vo.fechaHora > '2019-05-01'
+                    AND vo.estadoOrden IN ('Facturada', 'Abonado', 'Aprobado')
+                    GROUP BY vo.idOrden, voa.idMarketPlace; " )
+    
+    ordenes <-dbGetQuery(mydb, query)
+    dbDisconnect(mydb)
+    rv <- ordenes
+    
+    demoras <- rbind(ordenes$horasDemora, 0)
+    updateSliderInput(session = session,inputId = "ordenesBins", value = breaksOrdenesx(max(demoras)))   
+    rv
+  })
+  
+  output$barOrdenes <- renderPlotly({
+    
+    ordenes <- demorasOrdenes()
+    dataOrdenes = filter(ordenes, idMarketplace %in% substr(input$selectMarketplace, 1,1))
+    
+    demoras <- rbind (dataOrdenes$horasDemora, 0)
+    #legendtitle <- list(yref='paper',xref="paper",y=-0.6,x=0, text="Etapa de la orden",showarrow=F)
+    
+    
+    gg <- ggplotly(
+      ggplot(dataOrdenes, aes(x = horasDemora, fill = etapaOrden)) +
+        geom_histogram(position = 'stack', alpha = 0.79, 
+                       binwidth = input$ordenesBins) 
+      + scale_fill_discrete(name = "Etapa de la orden") 
+      + theme_grey() 
+      + theme( 
+        axis.text.x = element_text(angle = 45, face = "bold", size = 12, hjust = 1),
+        axis.title = element_text(face = "bold", size = 12),
+        axis.text.y = element_text(face = "bold", size = 12 ),
+        plot.title =  element_text(face ="bold", size = 20, hjust = 0.5)
+      )
+      + labs(x = 'Horas desde la compra', y = 'Cantidad de ordenes') 
+      + scale_x_continuous(breaks = seq(from =0 , to =max(demoras) + 12, by = breaksOrdenesx(max(demoras))))
+      + scale_y_continuous(breaks= pretty_breaks())
+    )        
+    
+    # gg <- style(gg, hovertemplate = paste(
+    #     "%{yaxis.title.text}: %{y:f}<br>",
+    #     "%{xaxis.title.text}: %{x:f}<br>"
+    #     # "Number Employed: %{marker.size:,}",
+    #     ))
+    
+    gg %>% layout(legend = list(orientation = "h", x = 0, y = -0.25, bgcolor = "#F0F0F0"))
+  })
+  output$tablaOrdenes <- renderDataTable({
+    ordenes <- demorasOrdenes()
+    dataOrdenes = filter(ordenes, idMarketplace %in% substr(input$selectMarketplace, 1,1))
+    DT::datatable(dataOrdenes, style = "bootstrap", editable = FALSE)
+  })
+  
+  # PLOT INTERDEPOSITOS --------------------------------------------------------------------
+  interdepositos <- reactive({
+    actualizarDatos10min()
+    mydb <- dbSession()
+    query <- paste("SELECT c.nro_cpbte as JI, fx_estadoInterdeposito(p.internoDespacho) as Estado, p.deposito as Deposito, hour(TIMEDIFF(now(), c.fecha_grabacion)) as Horas 
+                    FROM ventaweb_orden_articulo_pedidoStock p
+                    INNER JOIN ventaweb_orden vo ON p.idOrden = vo.idOrden
+                    INNER JOIN cab_stock_adespachar c ON c.interno_stock = p.internoDespacho
+                    left join ventaweb_orden_venta v ON p.idOrden = v.idOrden
+                    WHERE fx_estadoInterdeposito(p.internoDespacho) IN ('No preparado','Preparado','Despachado')
+                    and vo.estadoOrden <> 'Cancelado'
+                    AND idVenta is null
+                    AND c.fecha_grabacion > '2019-06-14';")
+    
+    interdepositos <-dbGetQuery(mydb, query)
+    dbDisconnect(mydb)
+    interdepositos
+  })
+  
+  output$boxplotInterdepositos <- renderPlotly({
+    dataInterdepositos = interdepositos()
+    
+    gg <- ggplotly(
+      ggplot(dataInterdepositos, aes(x = Deposito, y = Horas, z= JI, colour = Estado)) +
+        geom_point(size = 3, alpha = 0.55) +
+        theme_grey() +
+        theme( axis.text.x = element_text(angle = 45, face = "bold", size = 12, hjust = 1),
+               axis.title = element_text(face = "bold", size = 12),
+               axis.text.y = element_text(face = "bold", size = 12 ),
+               plot.title =  element_text(face ="bold", size = 20, hjust = 0.5)
+               #,legend.title = element_text(face = "bold", size = 12)
+        ) +
+        labs(x = 'Deposito', y = 'Tiempo (horas)') +
+        scale_y_continuous(breaks = seq(from = 0, to =max(dataInterdepositos$Horas), by = breaksInterdepositosy(max(dataInterdepositos$Horas)))) +
+        scale_colour_brewer(palette = 'Set1')
+    )
+    gg %>% layout(legend = list(orientation = "h", x = 0, y = -0.25, bgcolor = "#F0F0F0"))
+  })
+  
+  # PLOT EVO VENTAS -----------------------------------------------------------------
+  dataEvoVentas <- reactive({
+    actualizarDatos60min()
+    
+    mydb <- dbSession()
+    query <- paste("select m.descripcion as Marketplace, date(o.fechaHora) as Fecha, sum(oa.importe * oa.cantidad) + oe.costo as Importe, count(distinct o.idOrden) as Cantidad
+                    from ventaweb_orden o
+                    INNER JOIN ventaweb_orden_envio oe ON oe.idOrden = o.idOrden
+                    INNER JOIN ventaweb_orden_articulo oa ON oa.idOrden = o.idOrden
+                    inner join ventaweb_marketplace m on m.idMarketplace = oa.idMarketplace
+                    		  where date(o.fechaHora) BETWEEN '", input$dateRangeEvoVentas[1], "' and '", input$dateRangeEvoVentas[2], "'
+                    		  and estadoOrden IN ('Facturada', 'Abonado', 'Aprobado')
+                    group by oa.idMarketplace, fecha; ")
+    
+    datos <- dbGetQuery(mydb, query)
+    dbDisconnect(mydb)
+    
+    #Seteo la columna para que se lea como fecha
+    datos$Fecha <- as.Date(datos$Fecha) 
+    #Arma un data frame todas las fechas en el rango
+    minimo <- min(datos$Fecha)
+    maximo <- max(datos$Fecha)
+    
+    if(is.infinite(minimo)){
+      minimo <- Sys.Date()
+      maximo <- Sys.Date()
+    }
+    
+    rangoFecha <- data.frame(Fecha=seq(from = minimo, to = maximo, by="days")) 
+    #Cross join de fechas con marketplaces de los datos
+    rangoCompleto <- merge(x=rangoFecha, y = unique(datos$Marketplace),  all = TRUE) 
+    #Agrego las filas faltantes
+    datos <- merge(x= datos, y = rangoCompleto, by.x = c("Fecha", "Marketplace"), by.y = c("Fecha", "y"), all = TRUE) 
+    #Seteo en 0 el valor de esas filas
+    datos$Importe[is.na(datos$Importe)] = 0
+    datos$Cantidad[is.na(datos$Cantidad)] = 0
+    datos
+  })
+  
+  output$lineChartEvolucionVentas <- renderPlotly({
+    data <- dataEvoVentas()
+    rangoBreaks <- max(data$Importe)
+    if(is.infinite(rangoBreaks))
+      rangoBreaks <- 10000
+    
+    if(input$radioEvoVentas == "Importe"){
+      plot <- ggplot(data = data, aes(x = Fecha, y= Importe, colour = Marketplace))
+      scaley <- scale_y_continuous(labels = function(l) {trans = l / 1000; paste0(trans, " k")})
+    }
+    else {
+      plot <- ggplot(data = data, aes(x = Fecha, y= Cantidad, colour = Marketplace))
+      scaley <- scale_y_continuous(breaks = pretty_breaks())
+    }
+    
+    gg<- ggplotly(
+      plot + geom_line(alpha = 0.79) + geom_point(alpha = 0.79) +
+        theme_grey() +
+        
+        theme( axis.title.y = element_text(face = "bold", size = 12),
+               axis.title.x = element_text(face = "bold", size = 12), #element_blank(),
+               axis.text.x = element_text(angle = 35, face = "bold", size = 12, hjust = 1),
+               axis.text.y = element_text(face = "bold", size = 12 ),
+               plot.title =  element_text(face ="bold", size = 20, hjust = 0.5)) +
+        scale_x_date(date_breaks = "5 days", date_minor_breaks = "1 day", date_labels = "%b %d" ) +
+        scaley
+    )
+    gg %>% layout(legend = list(orientation = "h", x = 0, y = -0.35, bgcolor = "#F0F0F0"))
+    
+  })
+  
+  # PLOT PROMEDIO DE DEMORA ---------------------------------------------------------
+  dataPromDemora <- reactive({
+    actualizarDatos60min()
+    
+    mydb <- dbSession()
+    query <- paste(" SELECT m.descripcion as Marketplace, FIRST_DAY_OF_WEEK(DATE(vo.fechaHora)) as Semana, avg(hour(TIMEDIFF(voe.fechaHora, vo.fechaHora))) as horasDemoraPromedio 
+                    		FROM ventaweb_orden vo
+                    INNER JOIN ventaweb_orden_articulo voa ON voa.idOrden = vo.idOrden
+                    INNER JOIN ventaweb_marketplace m on m.idMarketplace = voa.idMarketplace
+                    INNER JOIN ventaweb_orden_enviada voe ON vo.idOrden = voe.idOrden
+                    where date(vo.fechaHora) BETWEEN FIRST_DAY_OF_WEEK('", input$dateRangePromDemora[1], "') AND '", input$dateRangePromDemora[2], " '
+                    AND vo.estadoOrden <> 'Cancelado'
+                    GROUP BY m.idMarketplace, Semana; ")
+    
+    
+    datos <- dbGetQuery(mydb, query)
+    dbDisconnect(mydb)
+     
+    # Seteo la columna para que se lea como fecha
+    datos$Semana <- as.Date(datos$Semana)
+    
+    datos
+  })
+  dataPromDemoraDiaSemana <- reactive({
+    actualizarDatos60min()
+    
+    mydb <- dbSession()
+    query <- paste(" SELECT vo.idOrden idOrden, m.descripcion as Marketplace, WEEKDAY(vo.fechaHora) as diaSemana, WEEKDAY(vo.fechaHora) as orden,  hour(TIMEDIFF(voe.fechaHora, vo.fechaHora)) as horasDemora  
+                	    FROM ventaweb_orden vo
+                  INNER JOIN ventaweb_orden_articulo voa ON voa.idOrden = vo.idOrden
+                  inner join ventaweb_marketplace m on m.idMarketplace = voa.idMarketplace
+                  INNER JOIN ventaweb_orden_enviada voe ON vo.idOrden = voe.idOrden
+                  WHERE date(vo.fechaHora) BETWEEN '", input$dateRangePromDemora[1], "' AND '", input$dateRangePromDemora[2], " '
+                  AND vo.estadoOrden <> 'Cancelado' 
+                  GROUP BY vo.idOrden, m.idMarketplace;")
+    
+    datos <- dbGetQuery(mydb, query)
+    dbDisconnect(mydb)
+    
+    datos$diaSemana[datos$diaSemana == 0] = 'Lunes'
+    datos$diaSemana[datos$diaSemana == 1] = 'Martes'
+    datos$diaSemana[datos$diaSemana == 2] = 'Miercoles'
+    datos$diaSemana[datos$diaSemana == 3] = 'Jueves'
+    datos$diaSemana[datos$diaSemana == 4] = 'Viernes'
+    datos$diaSemana[datos$diaSemana == 5] = 'Sabado'
+    datos$diaSemana[datos$diaSemana == 6] = 'Domingo'
+    
+    datos
+  })
+  
+  output$lineChartPromDemora <- renderPlotly({
+    data <- dataPromDemora()
+    rangoBreaks <- max(data$Importe)
+    if(is.infinite(rangoBreaks))
+      rangoBreaks <- 10000
+    
+    gg<- ggplotly(
+      ggplot(data = data, aes(x = Semana, y= horasDemoraPromedio, colour = Marketplace)) 
+      + geom_line(alpha = 0.79) + geom_point(alpha = 0.79) +
+        theme_grey() +
+        labs(x = 'Semana', y = 'Tiempo (horas)') +
+        theme( axis.title.y = element_text(face = "bold", size = 12),
+               axis.title.x = element_text(face = "bold", size = 12),
+               axis.text.x = element_text(angle = 35, face = "bold", size = 12, hjust = 1),
+               axis.text.y = element_text(face = "bold", size = 12 ),
+               plot.title =  element_text(face ="bold", size = 20, hjust = 0.5)) +
+        scale_y_continuous(breaks = seq(from = 0, to =max(data$horasDemoraPromedio), by = breaksInterdepositosy(max(data$horasDemoraPromedio))))+
+        scale_x_date(date_breaks = "1 week", date_minor_breaks = "1 day", date_labels = "%b %d" ) 
+      
+    )
+    gg %>% layout(legend = list(orientation = "h", x = 0, y = -0.35, bgcolor = "#F0F0F0"))
+    
+  })
+  output$scatterPlotPromDemora <- renderPlotly({
+    data = dataPromDemoraDiaSemana()
+    
+    gg <- ggplotly(
+      ggplot(data, aes(x = reorder(diaSemana, orden), y = horasDemora, colour = Marketplace)) +
+        geom_point(size = 6, alpha = 0.05, shape = 15 ) +
+        stat_summary(aes(x = reorder(diaSemana, orden), y = horasDemora, group=horasDemora), fun.y=mean, colour="black", geom="crossbar", group=1) +
+        theme_grey() +
+        theme( axis.text.x = element_text(face = "bold", size = 11, hjust = 1),
+               axis.title = element_text(face = "bold", size = 12),
+               axis.text.y = element_text(face = "bold", size = 12 ),
+               plot.title =  element_text(face ="bold", size = 20, hjust = 0.5)
+        ) +
+        labs(x = 'Día de la orden', y = 'Tiempo (horas)') +
+        scale_y_continuous(breaks = seq(from = 0, to =max(data$horasDemora), by = breaksInterdepositosy(max(data$horasDemora)))) +
+        scale_colour_brewer(palette = 'Set1')
+    )
+    gg <- style(gg,hovertemplate = paste(
+      #" idOrden: %{z}<br>",
+      " Día de la orden: %{x}<br>",
+      "Horas de la compra al envío: %{y:f}",
+      "<extra></extra>" )
+    )
+    gg %>% layout(legend = list(orientation = "h", x = 0, y = -0.25, bgcolor = "#F0F0F0"))
+  })
+})

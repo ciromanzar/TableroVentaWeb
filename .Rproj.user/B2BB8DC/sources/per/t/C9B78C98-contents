@@ -1,0 +1,180 @@
+#
+# This is the user-interface definition of a Shiny web application. You can
+# run the application by clicking 'Run App' above.
+#
+# Find out more about building applications with Shiny here:
+#
+#    http://shiny.rstudio.com/
+#
+library(shiny)
+library(RMySQL)
+library(datasets)
+library(shinyWidgets)
+library(shinydashboard)
+library(shinyjs)
+library(tidyverse)
+library(funModeling)
+library(Hmisc)
+library(plotly)
+library(lubridate)
+
+source("global.R")
+marketplaces <- marketplaces()
+
+shinyServer(dashboardPage(dashboardHeader(title="Tablero Cosmos"), skin="yellow",
+                          dashboardSidebar(
+                              # sidebarUserPanel(
+                              #     "User",
+                              #     subtitle = a(href = "#", icon("circle", class = "text-success"), "Online"),
+                              #     # Image file should be in www/ subdir
+                              #     # image = "userimage.png"
+                              # ),
+                              sidebarMenu(
+                                  # Setting id makes input$tabs give the tabName of currently-selected tab
+                                  id = "tabs",
+                                  menuItem("Venta Web", icon = icon("globe") , startExpanded = TRUE,
+                                           menuSubItem("Operativa", tabName = "operativaWeb", selected = TRUE),
+                                           menuSubItem("Historico", tabName = "historicoWeb")
+                                  )
+                              )
+                          ),  
+                          dashboardBody(
+                              
+                              useShinyjs(),
+                              
+                              tags$head(tags$style(HTML('/* body */
+                                .content-wrapper, .right-side {
+                                background-color: #ffffff;
+                                }'))),
+                              tabItems(tabItem("operativaWeb",
+                                               # Operativa Web ------------------------------------------------
+                                               titlePanel("Operativa de Venta Web"),
+                                               
+                                               hr(),
+                                               
+                                               fluidRow(
+                                                   
+                                                   uiOutput("uiAcumuladoMesOp"),
+                                                   
+                                                   uiOutput("uiOrdenesEnviadas"),
+                                                   
+                                                   uiOutput("uiOrdenesEnProceso")
+                                                   
+                                               ),
+                                               
+                                               hr(),
+                                               
+                                               fluidRow(
+                                                   column(6,
+                                                          align='Center',
+                                                          
+                                                          h3("Demora de entrega de ordenes en curso"),
+                                                          fluidRow(
+                                                              
+                                                              column(1,
+                                                                     dropdown(
+                                                                         tags$h3("Filtros"),
+                                                                         pickerInput(inputId = "selectMarketplace",
+                                                                                     label = "Marketplace:",
+                                                                                     choices=marketplaces,
+                                                                                     selected = marketplaces,
+                                                                                     options = list(`actions-box` = TRUE,
+                                                                                                    `selected-text-format` = "count > 3"),
+                                                                                     multiple = T),
+                                                                         sliderInput(inputId = "ordenesBins",
+                                                                                     label = "Detalle:",
+                                                                                     min = 1,
+                                                                                     max = 24,
+                                                                                     value = 2),
+                                                                         style = "material-circle",
+                                                                         status = "danger", icon = icon("filter"), width = "300px",
+                                                                         tooltip = tooltipOptions(title = "Filtros")
+                                                                     )
+                                                              ),
+                                                              column(11,
+                                                                     tabsetPanel(type = "tabs",
+                                                                                 tabPanel("Plot", plotlyOutput(outputId = "barOrdenes")),
+                                                                                 tabPanel("Tabla", DT::dataTableOutput("tablaOrdenes"))
+                                                                     )
+                                                              )
+                                                          )
+                                                   ),
+                                                   column(6,
+                                                          align='Center',
+                                                          
+                                                          h3('Plazos de envios de interdepositos'),
+                                                          # pickerInput(inputId = "selectEstadoInterdeposito",
+                                                          #      label = "Estados de interdeposito:",
+                                                          #      choices=c("No preparado","Preparado","Despachado"), 
+                                                          #      selected = c("No preparado","Preparado","Despachado"),
+                                                          #      options = list(`actions-box` = TRUE,
+                                                          #                     `selected-text-format` = "count > 3"), 
+                                                          #      multiple = T),
+                                                          column(1
+                                                          ),
+                                                          column(11,
+                                                                 tabsetPanel(type = "tabs",tabPanel("Plot", plotlyOutput(outputId = "boxplotInterdepositos")))
+                                                          )
+                                                          
+                                                   )
+                                               )
+                              ),
+                              # Historico Web ------------------------------------------------
+                              tabItem("historicoWeb",
+                                      titlePanel("Historico de Venta Web"),
+                                      
+                                      hr(),
+                                      
+                                      fluidRow(
+                                          uiOutput("uiAcumuladoMesHi"),
+                                          uiOutput("uiPromedioEnvioMes")
+                                      ),
+                                      fluidRow(
+                                          uiOutput("uiAcumuladoMesHiVTEX"),
+                                          uiOutput("uiAcumuladoMesHiMLMega"),
+                                          uiOutput("uiAcumuladoMesHiFactory")
+                                      ),
+                                      hr(),
+                                      fluidRow(
+                                          column(6,
+                                                 align='Center',
+                                                 h3("Evolución de ordenes cobradas"),
+                                                 h6(" "),
+                                                 fluidRow(
+                                                     column(1,dropdown(
+                                                        tags$h3("Filtros"),
+                                                         dateRangeInput(inputId = "dateRangeEvoVentas", label = "Rango de fechas", start = Sys.Date() - 31, end = Sys.Date()),
+                                                         radioButtons(inputId = "radioEvoVentas", choices = c("Importe", "Cantidad"), label = "Tipo:"),
+                                                         style = "material-circle",
+                                                         status = "danger", icon = icon("filter"), width = "300px",
+                                                         tooltip = tooltipOptions(title = "Filtros")
+                                                     )
+                                                     ),
+                                                     column(11, tabsetPanel(type = "tabs",tabPanel("Plot", plotlyOutput(outputId = "lineChartEvolucionVentas")))))
+                                                 
+                                          ),
+                                          column(6,
+                                                 align='Center',
+                                                 h3("Promedio de demora de envío de pedidos"),
+                                                 #h6("Desde compra hasta envío"),
+                                                 fluidRow(
+                                                     column(1,dropdown(
+                                                         tags$h3("Filtros"),
+                                                         dateRangeInput(inputId = "dateRangePromDemora", label = "Rango de fechas", start = Sys.Date() - 34, end = Sys.Date() - 3),
+                                                         style = "material-circle",
+                                                         status = "danger", icon = icon("filter"), width = "300px",
+                                                         tooltip = tooltipOptions(title = "Filtros")
+                                                     )
+                                                     ),
+                                                     column(11, 
+                                                            tabsetPanel(type = "tabs",
+                                                                        tabPanel("Evolución", plotlyOutput(outputId = "lineChartPromDemora")),
+                                                                        tabPanel("Por día de la semana", plotlyOutput(outputId = "scatterPlotPromDemora"))
+                                                            )
+                                                     )
+                                                 )
+                                          )
+                                          
+                                      )
+                              )
+                              ))))
